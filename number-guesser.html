@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETHER - Number Guesser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --glow-color: #f1c40f; }
+        body { margin: 0; font-family: 'Exo 2', sans-serif; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; text-align: center; }
+        .background-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background: linear-gradient(-45deg, #606c88, #3f4c6b); background-size: 400% 400%; animation: gradientFlow 25s ease infinite; }
+        @keyframes gradientFlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        .container { max-width: 500px; padding: 2rem; background: rgba(0,0,0,0.3); border-radius: 20px; box-shadow: 0 5px 25px rgba(0,0,0,0.2); backdrop-filter: blur(10px); }
+        h1 { font-size: clamp(2rem, 8vw, 3.5rem); font-weight: 700; text-shadow: 0 0 10px var(--glow-color), 0 0 20px var(--glow-color); margin-top: 0; }
+        p { font-size: 1.2rem; }
+        .input-area { display: flex; justify-content: center; gap: 1rem; margin: 2rem 0; }
+        #guessInput { font-family: 'Exo 2', sans-serif; width: 100px; padding: 0.8rem; border: 2px solid #fff; background-color: transparent; color: #fff; border-radius: 10px; font-size: 1.5rem; text-align: center; }
+        #guessInput:focus { outline: none; box-shadow: 0 0 15px var(--glow-color); }
+        .btn { padding: 0.8rem 1.5rem; font-size: 1.2rem; font-weight: 700; color: #3f4c6b; background-color: #fff; border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s; }
+        .btn:hover { transform: scale(1.05); box-shadow: 0 0 15px #fff; }
+        #playAgainBtn { display: none; margin-top: 1rem; }
+        .message-area { min-height: 80px; display: flex; flex-direction: column; justify-content: center; }
+        #message, #hint { font-size: 1.3rem; font-weight: 300; transition: color 0.5s ease; }
+        .back-btn { position: fixed; top: 20px; left: 20px; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 700; text-decoration: none; color: #fff; background-color: rgba(0,0,0,0.3); border: 2px solid transparent; border-radius: 25px; transition: all 0.3s ease; }
+        .back-btn:hover { border-color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="background-container"></div>
+    <a href="games.html" class="back-btn">← Back to Games</a>
+    <div class="container">
+        <h1>Number Guesser</h1>
+        <p>I'm thinking of a number between 1 and 100. Can you guess it?</p>
+        <div class="input-area">
+            <input type="number" id="guessInput" min="1" max="100">
+            <button class="btn" id="guessBtn">Guess</button>
+        </div>
+        <div class="message-area">
+            <p id="message">Make your first guess!</p>
+            <p id="hint">&nbsp;</p>
+        </div>
+        <button class="btn" id="playAgainBtn">Play Again</button>
+    </div>
+    <script>
+        const guessInput = document.getElementById('guessInput');
+        const guessBtn = document.getElementById('guessBtn');
+        const playAgainBtn = document.getElementById('playAgainBtn');
+        const messageEl = document.getElementById('message');
+        const hintEl = document.getElementById('hint');
+
+        let secretNumber, lastGuess, isGameOver;
+
+        function initGame() {
+            secretNumber = Math.floor(Math.random() * 100) + 1;
+            lastGuess = null;
+            isGameOver = false;
+
+            messageEl.textContent = "Make your first guess!";
+            messageEl.style.color = '#fff';
+            hintEl.innerHTML = '&nbsp;';
+            guessInput.value = '';
+            guessInput.disabled = false;
+            guessBtn.style.display = 'inline-block';
+            playAgainBtn.style.display = 'none';
+        }
+
+        function checkGuess() {
+            if (isGameOver) return;
+            const userGuess = parseInt(guessInput.value);
+
+            if (isNaN(userGuess) || userGuess < 1 || userGuess > 100) {
+                messageEl.textContent = "Please enter a number between 1 and 100.";
+                messageEl.style.color = '#e74c3c';
+                return;
+            }
+
+            const diff = Math.abs(secretNumber - userGuess);
+            const lastDiff = Math.abs(secretNumber - lastGuess);
+
+            if (userGuess === secretNumber) {
+                messageEl.textContent = `Correct! The number was ${secretNumber}!`;
+                messageEl.style.color = '#2ecc71';
+                hintEl.innerHTML = '&nbsp;';
+                endGame();
+            } else if (userGuess < secretNumber) {
+                messageEl.textContent = "Too low! Try a higher number.";
+                messageEl.style.color = '#3498db';
+                provideHint(userGuess, lastDiff, diff);
+            } else {
+                messageEl.textContent = "Too high! Try a lower number.";
+                messageEl.style.color = '#e67e22';
+                provideHint(userGuess, lastDiff, diff);
+            }
+            lastGuess = userGuess;
+            guessInput.focus();
+            guessInput.select();
+        }
+        
+        function provideHint(guess, lastDiff, currentDiff) {
+            if (lastGuess === null) {
+                if (currentDiff > 25) hintEl.textContent = "Hint: You're freezing cold...";
+                else hintEl.textContent = "Hint: You're in the ballpark.";
+            } else {
+                 if (currentDiff < lastDiff) {
+                    hintEl.textContent = "Hint: You're getting warmer!";
+                 } else {
+                    hintEl.textContent = "Hint: You're getting colder...";
+                 }
+            }
+             if (currentDiff <= 5) {
+                 hintEl.innerHTML = "<b>Hint: You're on fire! So close!</b>";
+             }
+        }
+
+        function endGame() {
+            isGameOver = true;
+            guessInput.disabled = true;
+            guessBtn.style.display = 'none';
+            playAgainBtn.style.display = 'inline-block';
+        }
+
+        guessBtn.addEventListener('click', checkGuess);
+        guessInput.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') checkGuess();
+        });
+        playAgainBtn.addEventListener('click', initGame);
+
+        initGame();
+    </script>
+</body>
+</html>

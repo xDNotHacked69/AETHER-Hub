@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flappy Circle Enhanced</title>
+    <style>
+        /* Basic styles - same as before with slight additions */
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(-45deg,
+                #ff0000, #ff9900, #00ff99, #0066ff, #cc00ff, #ff00ff, #00ffff, #ffff00);
+            background-size: 600% 600%;
+            animation: gradientBG 60s ease-in-out infinite;
+            display: flex; /* Use flex to center content */
+            justify-content: center;
+            align-items: center;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            25% { background-position: 50% 100%; }
+            50% { background-position: 100% 50%; }
+            75% { background-position: 50% 0%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        #game-container {
+            position: relative; /* Needed for positioning overlay elements */
+            width: 100%;
+            max-width: 400px;
+            /* Height will be set by canvas aspect ratio */
+        }
+
+        #canvas {
+            display: none; /* Initially hidden */
+            background: rgba(255, 255, 255, 0.1); /* Slightly visible canvas area */
+            width: 100%;
+            height: auto;
+            aspect-ratio: 2 / 3; /* Maintain aspect ratio */
+            display: block; /* Make it block to take up width */
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            border-radius: 5px;
+        }
+
+         /* Buttons styling */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-shadow: 1px 1px 3px black;
+        }
+
+        .button {
+            padding: 12px 25px;
+            margin: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            cursor: pointer;
+            font-size: 22px;
+            border: none;
+            border-radius: 10px;
+            transition: background 0.3s, transform 0.1s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .button:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+        .button:active {
+             transform: scale(0.95);
+        }
+
+        .game-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: black;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px white;
+        }
+         .game-info p {
+             margin: 5px 0;
+         }
+
+        .overlay-text {
+             font-size: 36px;
+             font-weight: bold;
+             text-align: center;
+        }
+        .overlay-text-small {
+             font-size: 24px;
+             margin-top: 10px;
+        }
+
+
+        .footer {
+            position: fixed;
+            bottom: 5px;
+            left: 5px;
+            color: white;
+            font-size: 12px;
+            font-family: monospace;
+            opacity: 0.6;
+            text-shadow: 1px 1px 1px black;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="canvas"></canvas>
+        <div id="ui-layer">
+            </div>
+        <div id="game-info" class="game-info" style="display: none;">
+            <p>Score: <span id="current-score">0</span></p>
+            <p>Best: <span id="best-score">0</span></p>
+        </div>
+    </div>
+
+    <div class="footer">Enhanced by AI | Press P to Pause</div>
+
+    <script>
+        // --- Get DOM Elements ---
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const uiLayer = document.getElementById('ui-layer');
+        const gameInfoDiv = document.getElementById('game-info');
+        const currentScoreSpan = document.getElementById('current-score');
+        const bestScoreSpan = document.getElementById('best-score');
+
+        // --- Game Constants ---
+        const PLAYER_DEFAULTS = { x: 80, radius: 15, color: 'red' };
+        const GRAVITY = 0.5;
+        const JUMP_STRENGTH = -9; // Slightly less intense jump
+        const PIPE_WIDTH = 50;
+        const PIPE_COLOR = 'green';
+        const PIPE_SPAWN_FREQUENCY = 90; // Frames between pipe spawns
+        const PARTICLE_COLOR = 'rgba(255, 99, 71, 0.7)'; // Tomato color for particles
+        const PARTICLE_LIFESPAN = 30; // Frames
+        const SHAKE_DURATION = 15; // Frames
+        const SHAKE_MAGNITUDE = 5; // Pixels
+
+        // --- Difficulty Settings ---
+        const DIFFICULTIES = {
+            easy: { pipeGap: 180, pipeSpeed: 2.5 },
+            medium: { pipeGap: 130, pipeSpeed: 3.5 },
+            hard: { pipeGap: 100, pipeSpeed: 4.5 }
+        };
+
+        // --- Game State Variables ---
+        let player;
+        let pipes;
+        let particles;
+        let frameCount;
+        let score;
+        let bestScore;
+        let currentDifficultySettings;
+        let gameState; // 'menu', 'difficulty', 'playing', 'paused', 'gameover'
+        let animationFrameId;
+        let shakeTimer;
+
+        // --- Asset Placeholders (Replace with actual paths) ---
+        const ASSETS = {
+             // playerSprite: loadImage('path/to/player-sprite.png'), // Example
+             // pipeSpriteTop: loadImage('path/to/pipe-top.png'),   // Example
+             // pipeSpriteBottom: loadImage('path/to/pipe-bottom.png'), // Example
+             jumpSound: loadSound('path/to/jump.wav'),     // Example
+             scoreSound: loadSound('path/to/score.wav'),    // Example
+             hitSound: loadSound('path/to/hit.wav')        // Example
+        };
+
+        // --- Utility Functions ---
+        function loadImage(src) {
+             // In a real scenario, you'd handle loading completion
+             const img = new Image();
+             img.src = src;
+             // console.log(`Attempting to load image: ${src}`); // Debugging
+             // img.onerror = () => console.error(`Failed to load image: ${src}`);
+             return img;
+        }
+
+        function loadSound(src) {
+            // In a real scenario, handle loading and potential errors
+            const sound = new Audio(src);
+            // console.log(`Attempting to load sound: ${src}`); // Debugging
+            // sound.onerror = () => console.error(`Failed to load sound: ${src}`);
+            return sound;
+        }
+
+        function playSound(sound) {
+            // Optional: Reset playback position and play
+             if (sound && sound.readyState >= 2) { // Check if sound is ready (basic check)
+                 sound.currentTime = 0;
+                 sound.play().catch(e => console.warn("Sound play interrupted:", e)); // Handle potential play errors
+             } else {
+                 // console.warn("Sound not loaded or ready:", sound ? sound.src : 'undefined');
+             }
+        }
+
+        // --- Game Initialization ---
+        function init() {
+            resizeCanvas(); // Set initial canvas size
+            window.addEventListener('resize', resizeCanvas); // Adjust canvas on resize
+            bestScore = localStorage.getItem('flappyCircleBestScore') || 0;
+            showMainMenu();
+            setupInputListeners(); // Setup listeners once
+        }
+
+        function resizeCanvas() {
+             const container = document.getElementById('game-container');
+             // Maintain aspect ratio 2:3 based on container width
+             const newWidth = container.clientWidth;
+             const newHeight = newWidth * (3 / 2);
+
+             canvas.width = newWidth;
+             canvas.height = newHeight;
+             // Optional: Redraw static elements if needed after resize
+        }
+
+
+        // --- UI Management ---
+        function showMainMenu() {
+            gameState = 'menu';
+            canvas.style.display = 'none';
+            gameInfoDiv.style.display = 'none';
+            uiLayer.style.display = 'flex';
+            uiLayer.innerHTML = `
+                <div class="overlay-text">Flappy Circle!</div>
+                <div class="button" id="play-button">Play Game</div>
+            `;
+            document.getElementById('play-button').onclick = showDifficultyMenu;
+        }
+
+        function showDifficultyMenu() {
+            gameState = 'difficulty';
+            uiLayer.innerHTML = `
+                <div class="overlay-text">Select Difficulty</div>
+                <div class="button" data-difficulty="easy">Easy</div>
+                <div class="button" data-difficulty="medium">Medium</div>
+                <div class="button" data-difficulty="hard">Hard</div>
+                <div class="button" id="back-button" style="background: #555;">Back</div>
+            `;
+            uiLayer.querySelectorAll('.button[data-difficulty]').forEach(button => {
+                button.onclick = () => startGame(button.dataset.difficulty);
+            });
+            document.getElementById('back-button').onclick = showMainMenu;
+        }
+
+        function showPauseScreen() {
+             uiLayer.style.display = 'flex';
+             uiLayer.innerHTML = `
+                 <div class="overlay-text">Paused</div>
+                 <div class="overlay-text-small">(Press P to Resume)</div>
+             `;
+        }
+
+         function showGameOverScreen() {
+            gameState = 'gameover';
+            playSound(ASSETS.hitSound); // Play hit sound
+            shakeTimer = SHAKE_DURATION; // Start screen shake
+
+             // Update best score if needed
+             if (score > bestScore) {
+                 bestScore = score;
+                 localStorage.setItem('flappyCircleBestScore', bestScore);
+             }
+             bestScoreSpan.textContent = bestScore; // Update display immediately
+
+            // Delay showing buttons slightly to let shake finish
+            setTimeout(() => {
+                 if (gameState !== 'gameover') return; // Ensure we are still in game over state
+
+                 uiLayer.style.display = 'flex';
+                 uiLayer.innerHTML = `
+                     <div class="overlay-text">Game Over!</div>
+                     <div class="overlay-text-small">Score: ${score}</div>
+                     <div class="overlay-text-small">Best: ${bestScore}</div>
+                     <div class="button" id="restart-button">Play Again</div>
+                     <div class="button" id="menu-button">Main Menu</div>
+                 `;
+                 document.getElementById('restart-button').onclick = () => {
+                     // Restart with the same difficulty
+                     startGame(Object.keys(DIFFICULTIES).find(key => DIFFICULTIES[key] === currentDifficultySettings));
+                 };
+                 document.getElementById('menu-button').onclick = showMainMenu;
+             }, SHAKE_DURATION * (1000 / 60) + 100); // Wait for shake + a bit extra
+         }
+
+        // --- Game Logic ---
+        function startGame(difficulty) {
+            gameState = 'playing';
+            currentDifficultySettings = DIFFICULTIES[difficulty];
+            if (!currentDifficultySettings) {
+                console.error("Invalid difficulty selected:", difficulty);
+                showDifficultyMenu(); // Go back if invalid
+                return;
+            }
+
+            // Reset game variables
+            player = { ...PLAYER_DEFAULTS, y: canvas.height / 3, velocity: 0 }; // Start higher up
+            pipes = [];
+            particles = [];
+            frameCount = 0;
+            score = 0;
+            shakeTimer = 0;
+
+            // Update UI
+            uiLayer.style.display = 'none'; // Hide menus
+            canvas.style.display = 'block';
+            gameInfoDiv.style.display = 'block';
+            currentScoreSpan.textContent = score;
+            bestScoreSpan.textContent = bestScore;
+
+            // Start game loop
+            if (animationFrameId) cancelAnimationFrame(animationFrameId); // Cancel previous loop if any
+            gameLoop();
+        }
+
+        function pauseGame() {
+            if (gameState === 'playing') {
+                gameState = 'paused';
+                showPauseScreen();
+                // No need to cancel animation frame, just stop updates
+            }
+        }
+
+        function resumeGame() {
+             if (gameState === 'paused') {
+                 gameState = 'playing';
+                 uiLayer.style.display = 'none'; // Hide pause screen
+                 // No need to restart loop, it continues from gameLoop check
+             }
+        }
+
+        function playerJump() {
+             if (gameState === 'playing') {
+                 player.velocity = JUMP_STRENGTH;
+                 playSound(ASSETS.jumpSound); // Play jump sound
+
+                 // Add jump particles
+                 for (let i = 0; i < 5; i++) {
+                     particles.push({
+                         x: player.x,
+                         y: player.y + player.radius,
+                         vx: (Math.random() - 0.5) * 2,
+                         vy: Math.random() * 2 + 1, // Move downwards
+                         life: PARTICLE_LIFESPAN,
+                         alpha: 1
+                     });
+                 }
+             }
+        }
+
+        function updatePlayer() {
+            player.velocity += GRAVITY;
+            player.velocity *= 0.98; // Air resistance / damping
+            player.y += player.velocity;
+
+            // Check boundaries
+            if (player.y + player.radius > canvas.height || player.y - player.radius < 0) {
+                 if (gameState === 'playing') showGameOverScreen();
+            }
+        }
+
+        function updatePipes() {
+            // Spawn new pipes
+            if (frameCount % PIPE_SPAWN_FREQUENCY === 0) {
+                let pipeTopHeight = Math.random() * (canvas.height / 2 - 50) + 50; // Ensure minimum height
+                pipes.push({
+                    x: canvas.width,
+                    topHeight: pipeTopHeight,
+                    bottomY: pipeTopHeight + currentDifficultySettings.pipeGap,
+                    width: PIPE_WIDTH,
+                    passed: false
+                });
+            }
+
+            // Move and check pipes
+            pipes.forEach(pipe => {
+                pipe.x -= currentDifficultySettings.pipeSpeed;
+
+                // Collision check
+                if (
+                    player.x + player.radius > pipe.x &&
+                    player.x - player.radius < pipe.x + pipe.width &&
+                    (player.y - player.radius < pipe.topHeight || player.y + player.radius > pipe.bottomY)
+                ) {
+                    if (gameState === 'playing') showGameOverScreen();
+                }
+
+                // Score check
+                if (!pipe.passed && pipe.x + pipe.width < player.x - player.radius) {
+                    pipe.passed = true;
+                    score++;
+                    currentScoreSpan.textContent = score; // Update score display
+                    playSound(ASSETS.scoreSound); // Play score sound
+                    // Add score animation/feedback here if desired
+                }
+            });
+
+            // Remove off-screen pipes
+            pipes = pipes.filter(pipe => pipe.x + pipe.width > 0);
+        }
+
+        function updateParticles() {
+             particles.forEach(p => {
+                 p.x += p.vx;
+                 p.y += p.vy;
+                 p.alpha = Math.max(0, p.alpha - (1 / p.life)); // Fade out
+             });
+             // Remove dead particles
+             particles = particles.filter(p => p.alpha > 0);
+        }
+
+
+        // --- Drawing Functions ---
+        function drawPlayer(ctx) {
+            // --- Placeholder Drawing (Replace with sprite) ---
+             ctx.fillStyle = player.color;
+             ctx.beginPath();
+             ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+             ctx.fill();
+             ctx.fillStyle = 'rgba(0,0,0,0.2)'; // Simple shadow below
+             ctx.beginPath();
+             ctx.arc(player.x, player.y + player.radius / 2 , player.radius * 0.8, 0, Math.PI * 2);
+             ctx.fill();
+
+            /* --- Sprite Drawing Example (Comment out placeholder above) ---
+            if (ASSETS.playerSprite && ASSETS.playerSprite.complete) {
+                // Optional: Add rotation based on velocity
+                // let angle = player.velocity * 0.05; // Adjust multiplier for desired rotation
+                // ctx.save();
+                // ctx.translate(player.x, player.y);
+                // ctx.rotate(angle);
+                // ctx.drawImage(ASSETS.playerSprite, -player.radius, -player.radius, player.radius * 2, player.radius * 2);
+                // ctx.restore();
+
+                // Simpler non-rotated version:
+                 ctx.drawImage(ASSETS.playerSprite, player.x - player.radius, player.y - player.radius, player.radius * 2, player.radius * 2);
+            } else {
+                // Fallback if sprite fails to load
+                ctx.fillStyle = player.color;
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            */
+        }
+
+        function drawPipes(ctx) {
+             pipes.forEach(pipe => {
+                 // --- Placeholder Drawing (Replace with sprites) ---
+                 ctx.fillStyle = PIPE_COLOR;
+                 // Top pipe
+                 ctx.fillRect(pipe.x, 0, pipe.width, pipe.topHeight);
+                 // Bottom pipe
+                 ctx.fillRect(pipe.x, pipe.bottomY, pipe.width, canvas.height - pipe.bottomY);
+
+
+                 /* --- Sprite Drawing Example (Comment out placeholder above) ---
+                 // Top Pipe
+                 if (ASSETS.pipeSpriteTop && ASSETS.pipeSpriteTop.complete) {
+                      ctx.drawImage(ASSETS.pipeSpriteTop, pipe.x, pipe.topHeight - ASSETS.pipeSpriteTop.height, pipe.width, ASSETS.pipeSpriteTop.height); // Adjust positioning based on sprite anchor point
+                 } else {
+                      ctx.fillStyle = PIPE_COLOR;
+                      ctx.fillRect(pipe.x, 0, pipe.width, pipe.topHeight); // Fallback
+                 }
+                 // Bottom Pipe
+                 if (ASSETS.pipeSpriteBottom && ASSETS.pipeSpriteBottom.complete) {
+                      ctx.drawImage(ASSETS.pipeSpriteBottom, pipe.x, pipe.bottomY, pipe.width, ASSETS.pipeSpriteBottom.height); // Adjust positioning
+                 } else {
+                      ctx.fillStyle = PIPE_COLOR;
+                       ctx.fillRect(pipe.x, pipe.bottomY, pipe.width, canvas.height - pipe.bottomY); // Fallback
+                 }
+                 */
+             });
+        }
+
+        function drawParticles(ctx) {
+             particles.forEach(p => {
+                 ctx.fillStyle = `rgba(255, 99, 71, ${p.alpha})`; // Use particle alpha
+                 ctx.beginPath();
+                 ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); // Small particles
+                 ctx.fill();
+             });
+        }
+
+        // --- Main Game Loop ---
+        function gameLoop() {
+            // Stop loop if not playing or paused
+            if (gameState !== 'playing' && gameState !== 'paused' && gameState !== 'gameover') {
+                 return;
+            }
+
+            // Handle Paused State
+             if (gameState === 'paused') {
+                  // Draw current state but don't update logic
+                  draw();
+                  // Optional: Draw pause overlay directly on canvas if needed
+                  // ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                  // ctx.fillRect(0, 0, canvas.width, canvas.height);
+                  // ctx.fillStyle = 'white'; ctx.font = '30px Arial'; ctx.textAlign = 'center';
+                  // ctx.fillText('Paused', canvas.width / 2, canvas.height / 2);
+                  animationFrameId = requestAnimationFrame(gameLoop); // Keep loop running for resume
+                  return;
+             }
+
+             // Handle Game Over state (only for drawing before screen appears)
+             if (gameState === 'gameover' && shakeTimer <= 0) {
+                 // Stop updates once game over screen is fully triggered
+                  draw(); // Draw final frame
+                 return;
+             }
+
+
+            // --- Updates (only if playing) ---
+            if (gameState === 'playing') {
+                 updatePlayer();
+                 updatePipes();
+                 updateParticles();
+                 frameCount++;
+            }
+
+            // --- Drawing ---
+            draw(); // Call main draw function
+
+            // --- Continue Loop ---
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- Master Draw Function ---
+        function draw() {
+            ctx.save(); // Save context state
+
+            // Apply Screen Shake if active
+            if (shakeTimer > 0 && gameState === 'gameover') {
+                 shakeTimer--;
+                 const shakeX = (Math.random() - 0.5) * 2 * SHAKE_MAGNITUDE;
+                 const shakeY = (Math.random() - 0.5) * 2 * SHAKE_MAGNITUDE;
+                 ctx.translate(shakeX, shakeY);
+            }
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Game Elements
+            drawPipes(ctx);
+            drawParticles(ctx);
+            drawPlayer(ctx);
+            // Note: Score/Best Score are now in a separate HTML div
+
+            ctx.restore(); // Restore context state (removes shake effect for next frame)
+        }
+
+
+        // --- Input Handling ---
+        function setupInputListeners() {
+            // Use keydown for better responsiveness than keypress
+            window.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' || e.code === 'ArrowUp' || e.key === ' ') { // Space or Up Arrow
+                    e.preventDefault(); // Prevent space bar scrolling
+                    playerJump();
+                }
+                 if (e.key.toUpperCase() === 'P') { // Pause Toggle
+                     if (gameState === 'playing') {
+                         pauseGame();
+                     } else if (gameState === 'paused') {
+                         resumeGame();
+                     }
+                 }
+            });
+
+             // Touch / Click input
+             canvas.addEventListener('touchstart', (e) => {
+                  e.preventDefault(); // Prevent double tap zoom, etc.
+                  playerJump();
+             });
+             canvas.addEventListener('mousedown', (e) => {
+                  e.preventDefault();
+                  playerJump();
+             });
+
+             // Listen for clicks on the UI layer as well for menu buttons etc.
+              uiLayer.addEventListener('click', (e) => {
+                   // If the click is directly on the uiLayer background (not a button) and game is playing/paused
+                   if (e.target === uiLayer && gameState === 'playing') {
+                       playerJump(); // Treat background click as jump
+                   }
+              });
+        }
+
+        // --- Start Everything ---
+        init();
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETHER - Quizzes</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; font-family: 'Exo 2', sans-serif; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; text-align: center; }
+        .background-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background: linear-gradient(45deg, #4b134f, #c94b4b); background-size: 400% 400%; animation: gradientFlow 25s ease infinite; }
+        @keyframes gradientFlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        .quiz-container { width: 90%; max-width: 800px; background: rgba(0,0,0,0.4); backdrop-filter: blur(10px); border-radius: 20px; padding: 2rem; box-shadow: 0 5px 30px rgba(0,0,0,0.3); }
+        .quiz-header h2 { margin: 0; font-size: 1.5rem; }
+        #question-text { font-size: 1.8rem; margin: 2rem 0; font-weight: 300; min-height: 5rem; }
+        .answer-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .btn { font-family: 'Exo 2', sans-serif; width: 100%; padding: 1rem; font-size: 1.1rem; color: #fff; background-color: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.2); border-radius: 10px; cursor: pointer; transition: all 0.2s ease; }
+        .btn:hover:not(:disabled) { background-color: rgba(255, 255, 255, 0.3); border-color: #fff; }
+        .btn.correct { background-color: #2ecc71; border-color: #2ecc71; transform: scale(1.02); }
+        .btn.incorrect { background-color: #e74c3c; border-color: #e74c3c; }
+        .btn:disabled { cursor: not-allowed; }
+        .quiz-footer { margin-top: 2rem; }
+        #next-btn { font-weight: 700; color: #000; background-color: #fff; display: none; margin: auto; }
+        .hidden { display: none; }
+        .back-btn { position: fixed; top: 20px; left: 20px; padding: 0.75rem 1.5rem; text-decoration: none; font-weight: 700; color: #fff; background: rgba(0,0,0,0.2); border-radius: 25px; transition: 0.3s; }
+        .back-btn:hover { background: rgba(0,0,0,0.4); }
+        @media (max-width: 600px) { .answer-buttons { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="background-container"></div>
+    <a href="index.html" class="back-btn">← Back to Home</a>
+    <div class="quiz-container">
+        <div id="start-screen">
+            <h1>AETHER Quizzes</h1>
+            <p>You must answer at least 2 out of 3 quizzes correctly in a level to advance. Complete 10 levels to see your overall score. Good luck!</p>
+            <button class="btn" id="start-btn" style="padding: 1rem 3rem; font-size: 1.5rem; font-weight: 700;">Start</button>
+        </div>
+        
+        <div id="quiz-view" class="hidden">
+            <div class="quiz-header">
+                <h2 id="level-title">Level X - Quiz Y/3</h2>
+            </div>
+            <p id="question-text">Question goes here...</p>
+            <div id="answer-buttons" class="answer-buttons">
+                </div>
+            <div class="quiz-footer">
+                <button class="btn" id="next-btn">Next</button>
+            </div>
+        </div>
+        
+        <div id="results-screen" class="hidden">
+            <h1 id="results-title">Level Results</h1>
+            <p id="results-info"></p>
+            <div id="results-details"></div>
+            <button class="btn" id="continue-btn" style="margin-top: 2rem;">Continue</button>
+        </div>
+    </div>
+    <script>
+    // --- Quiz Data ---
+    // In a real application, this would come from a database.
+    // I've created 12 levels (36 quizzes) to demonstrate the system.
+    const quizData = [
+        // Levels 1-2: Easy
+        { level: 1, quizzes: [
+            { q: "What is the primary color of a banana?", a: ["Blue", "Yellow", "Red", "Green"], c: "Yellow" },
+            { q: "How many sides does a triangle have?", a: ["2", "3", "4", "5"], c: "3" },
+            { q: "Which planet is known as the Red Planet?", a: ["Earth", "Mars", "Jupiter", "Saturn"], c: "Mars" }
+        ]},
+        { level: 2, quizzes: [
+            { q: "What is 10 + 15?", a: ["20", "25", "30", "35"], c: "25" },
+            { q: "Which animal is known as the 'King of the Jungle'?", a: ["Elephant", "Tiger", "Lion", "Bear"], c: "Lion" },
+            { q: "What do bees produce?", a: ["Syrup", "Honey", "Nectar", "Pollen"], c: "Honey" }
+        ]},
+        // Levels 3-5: Medium (Sample)
+        { level: 3, quizzes: [
+            { q: "What is the capital of Japan?", a: ["Beijing", "Seoul", "Tokyo", "Bangkok"], c: "Tokyo" },
+            { q: "Who wrote 'Romeo and Juliet'?", a: ["Charles Dickens", "J.K. Rowling", "William Shakespeare", "Mark Twain"], c: "William Shakespeare" },
+            { q: "What is the chemical symbol for water?", a: ["H2O", "CO2", "O2", "NaCl"], c: "H2O" }
+        ]},
+        { level: 4, quizzes: [
+            { q: "Which is the largest ocean on Earth?", a: ["Atlantic", "Indian", "Arctic", "Pacific"], c: "Pacific" },
+            { q: "What is the square root of 64?", a: ["6", "7", "8", "9"], c: "8" },
+            { q: "In what year did the Titanic sink?", a: ["1905", "1912", "1918", "1923"], c: "1912" }
+        ]},
+         { level: 5, quizzes: [
+            { q: "Who painted the Mona Lisa?", a: ["Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci", "Claude Monet"], c: "Leonardo da Vinci" },
+            { q: "What currency is used in the United Kingdom?", a: ["Euro", "Dollar", "Pound Sterling", "Yen"], c: "Pound Sterling" },
+            { q: "What is the hardest natural substance on Earth?", a: ["Gold", "Iron", "Diamond", "Quartz"], c: "Diamond" }
+        ]},
+        // Levels 6-8: Hard (Sample)
+        { level: 6, quizzes: [
+            { q: "What is the powerhouse of the cell?", a: ["Nucleus", "Ribosome", "Mitochondrion", "Cell Wall"], c: "Mitochondrion" },
+            { q: "Which element has the atomic number 1?", a: ["Helium", "Oxygen", "Hydrogen", "Carbon"], c: "Hydrogen" },
+            { q: "In Greek mythology, who is the god of the sea?", a: ["Zeus", "Hades", "Poseidon", "Ares"], c: "Poseidon" }
+        ]},
+        { level: 7, quizzes: [
+            { q: "What is the boiling point of water in Celsius?", a: ["90°C", "100°C", "110°C", "120°C"], c: "100°C" },
+            { q: "Who discovered penicillin?", a: ["Marie Curie", "Albert Einstein", "Alexander Fleming", "Isaac Newton"], c: "Alexander Fleming" },
+            { q: "What is the most spoken language in the world?", a: ["English", "Spanish", "Mandarin Chinese", "Hindi"], c: "Mandarin Chinese" }
+        ]},
+        { level: 8, quizzes: [
+            { q: "What is the main ingredient in guacamole?", a: ["Tomato", "Avocado", "Onion", "Pepper"], c: "Avocado" },
+            { q: "Which country is home to the kangaroo?", a: ["South Africa", "India", "Australia", "Brazil"], c: "Australia" },
+            { q: "What is the largest bone in the human body?", a: ["Femur", "Humerus", "Tibia", "Fibula"], c: "Femur" }
+        ]},
+        // Levels 9-10: Very Hard (Sample)
+        { level: 9, quizzes: [
+            { q: "What is the speed of light?", a: ["300,000 km/s", "150,000 km/s", "500,000 km/s", "1,000,000 km/s"], c: "300,000 km/s" },
+            { q: "Which philosopher is known for 'I think, therefore I am'?", a: ["Socrates", "Plato", "Aristotle", "René Descartes"], c: "René Descartes" },
+            { q: "What is the capital of Australia?", a: ["Sydney", "Melbourne", "Canberra", "Perth"], c: "Canberra" }
+        ]},
+        { level: 10, quizzes: [
+            { q: "In which year did World War II end?", a: ["1943", "1944", "1945", "1946"], c: "1945" },
+            { q: "What is the smallest prime number?", a: ["0", "1", "2", "3"], c: "2" },
+            { q: "Who was the first person to walk on the moon?", a: ["Buzz Aldrin", "Yuri Gagarin", "Neil Armstrong", "Michael Collins"], c: "Neil Armstrong" }
+        ]},
+        // Final Score Levels
+        { level: 11, quizzes: [
+            { q: "What is the value of Pi (to two decimal places)?", a: ["3.12", "3.14", "3.16", "3.18"], c: "3.14" },
+            { q: "What is the main component of Earth's atmosphere?", a: ["Oxygen", "Carbon Dioxide", "Nitrogen", "Argon"], c: "Nitrogen" },
+            { q: "Which artist cut off his own ear?", a: ["Pablo Picasso", "Salvador Dalí", "Vincent van Gogh", "Claude Monet"], c: "Vincent van Gogh" }
+        ]},
+        { level: 12, quizzes: [
+            { q: "What is the world's longest river?", a: ["Amazon", "Nile", "Yangtze", "Mississippi"], c: "Nile" },
+            { q: "How many planets are in our Solar System?", a: ["7", "8", "9", "10"], c: "8" },
+            { q: "What is the largest country by land area?", a: ["Canada", "China", "USA", "Russia"], c: "Russia" }
+        ]},
+    ];
+    
+    // --- DOM Elements ---
+    const startScreen = document.getElementById('start-screen');
+    const quizView = document.getElementById('quiz-view');
+    const resultsScreen = document.getElementById('results-screen');
+    const startBtn = document.getElementById('start-btn');
+    const levelTitle = document.getElementById('level-title');
+    const questionText = document.getElementById('question-text');
+    const answerButtonsEl = document.getElementById('answer-buttons');
+    const resultsTitle = document.getElementById('results-title');
+    const resultsInfo = document.getElementById('results-info');
+    const resultsDetails = document.getElementById('results-details');
+    const continueBtn = document.getElementById('continue-btn');
+
+    // --- State Variables ---
+    let currentLevel = 1;
+    let quizIndexInLevel = 0;
+    let levelScore = 0;
+    let totalQuizzesCompleted = 0;
+    let totalCorrectAnswers = 0;
+
+    const startQuiz = () => {
+        startScreen.classList.add('hidden');
+        resultsScreen.classList.add('hidden');
+        quizView.classList.remove('hidden');
+        displayQuiz();
+    };
+
+    const displayQuiz = () => {
+        resetState();
+        const levelData = quizData.find(l => l.level === currentLevel);
+        const quiz = levelData.quizzes[quizIndexInLevel];
+        
+        levelTitle.innerText = `Level ${currentLevel} - Quiz ${quizIndexInLevel + 1}/3`;
+        questionText.innerText = quiz.q;
+
+        quiz.a.forEach(answer => {
+            const button = document.createElement('button');
+            button.innerText = answer;
+            button.classList.add('btn');
+            button.addEventListener('click', () => selectAnswer(button, quiz.c));
+            answerButtonsEl.appendChild(button);
+        });
+    };
+    
+    const resetState = () => {
+        while(answerButtonsEl.firstChild) {
+            answerButtonsEl.removeChild(answerButtonsEl.firstChild);
+        }
+    };
+
+    const selectAnswer = (selectedBtn, correctAnswer) => {
+        Array.from(answerButtonsEl.children).forEach(button => {
+            button.disabled = true; // Disable all buttons after one is clicked
+            if (button.innerText === correctAnswer) {
+                button.classList.add('correct');
+            } else {
+                button.classList.add('incorrect');
+            }
+        });
+        
+        if (selectedBtn.innerText === correctAnswer) {
+            levelScore++;
+            totalCorrectAnswers++;
+        }
+        totalQuizzesCompleted++;
+
+        setTimeout(() => {
+            quizIndexInLevel++;
+            if (quizIndexInLevel < 3) {
+                displayQuiz();
+            } else {
+                showLevelResults();
+            }
+        }, 1500); // Wait 1.5 seconds before next question or results
+    };
+    
+    const showLevelResults = () => {
+        quizView.classList.add('hidden');
+        resultsScreen.classList.remove('hidden');
+
+        resultsTitle.innerText = `Level ${currentLevel} Results`;
+        resultsInfo.innerText = `You answered ${levelScore} out of 3 correctly.`;
+        
+        if (levelScore >= 2) {
+            if (currentLevel === 10) {
+                 const overallPercentage = Math.round((totalCorrectAnswers / totalQuizzesCompleted) * 100);
+                 resultsDetails.innerText = `Congratulations! You've completed 10 levels! Your overall score is ${overallPercentage}%.`;
+                 continueBtn.innerText = "Play More Levels";
+            } else {
+                resultsDetails.innerText = 'Congratulations, you passed this level!';
+                continueBtn.innerText = "Proceed to Next Level";
+            }
+            currentLevel++;
+        } else {
+            resultsDetails.innerText = 'You need to answer at least 2 correctly to pass. Please try this level again.';
+            continueBtn.innerText = "Try Level Again";
+        }
+        levelScore = 0;
+        quizIndexInLevel = 0;
+    };
+
+    startBtn.addEventListener('click', startQuiz);
+    continueBtn.addEventListener('click', startQuiz);
+
+    </script>
+</body>
+</html>

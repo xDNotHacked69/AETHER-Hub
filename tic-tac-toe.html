@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETHER - Tic-Tac-Toe (AI)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --glow-color: #e74c3c; }
+        body { margin: 0; font-family: 'Exo 2', sans-serif; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; text-align: center; }
+        .background-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background: linear-gradient(45deg, #2c3e50, #4ca1af); background-size: 400% 400%; animation: gradientFlow 20s ease infinite; }
+        @keyframes gradientFlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        .container { display: flex; flex-direction: column; align-items: center; gap: 2rem; }
+        h1 { font-size: clamp(2rem, 8vw, 4rem); font-weight: 700; text-shadow: 0 0 10px var(--glow-color), 0 0 20px var(--glow-color); margin: 0; }
+        #status { font-size: 1.5rem; font-weight: 300; min-height: 2.25rem; transition: all 0.3s ease; }
+        .board { display: grid; grid-template-columns: repeat(3, 100px); grid-template-rows: repeat(3, 100px); gap: 10px; position: relative; }
+        .cell { width: 100px; height: 100px; background-color: rgba(255, 255, 255, 0.1); border-radius: 10px; display: flex; justify-content: center; align-items: center; font-size: 4rem; font-weight: 700; cursor: pointer; transition: background-color 0.3s; user-select: none; }
+        .cell:not(.x):not(.o):hover { background-color: rgba(255, 255, 255, 0.2); }
+        .cell.x { color: #e74c3c; text-shadow: 0 0 8px #e74c3c; }
+        .cell.o { color: #3498db; text-shadow: 0 0 8px #3498db; }
+        .btn { padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 700; color: #fff; background-color: transparent; border: 2px solid #fff; border-radius: 25px; cursor: pointer; transition: all 0.3s; }
+        .btn:hover { background-color: #fff; color: #2c3e50; }
+        .back-btn { position: fixed; top: 20px; left: 20px; text-decoration: none; }
+        @media (max-width: 480px) { .board { grid-template-columns: repeat(3, 80px); grid-template-rows: repeat(3, 80px); } .cell { width: 80px; height: 80px; font-size: 3rem; } }
+    </style>
+</head>
+<body>
+    <div class="background-container"></div>
+    <a href="games.html" class="btn back-btn">← Back to Games</a>
+    <div class="container">
+        <h1>Tic-Tac-Toe</h1>
+        <div id="status">Your Turn (O)</div>
+        <div class="board" id="board"></div>
+        <button class="btn" id="restartBtn">Restart Game</button>
+    </div>
+    <script>
+        const boardElement = document.getElementById('board');
+        const statusDisplay = document.getElementById('status');
+        const restartBtn = document.getElementById('restartBtn');
+        const cells = [];
+
+        const humanPlayer = 'O';
+        const aiPlayer = 'X';
+        let boardState;
+        let gameActive = true;
+
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6],
+            [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]
+        ];
+
+        function checkWinner(board, player) {
+            for (const condition of winningConditions) {
+                if (condition.every(index => board[index] === player)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function getAvailableMoves(board) {
+            return board.map((val, index) => val === '' ? index : null).filter(val => val !== null);
+        }
+
+        // The "smart as hell" AI using the minimax algorithm
+        function minimax(newBoard, player) {
+            const availSpots = getAvailableMoves(newBoard);
+
+            if (checkWinner(newBoard, humanPlayer)) {
+                return { score: -10 };
+            } else if (checkWinner(newBoard, aiPlayer)) {
+                return { score: 10 };
+            } else if (availSpots.length === 0) {
+                return { score: 0 };
+            }
+
+            const moves = [];
+            for (let i = 0; i < availSpots.length; i++) {
+                const move = {};
+                move.index = availSpots[i];
+                newBoard[availSpots[i]] = player;
+
+                if (player === aiPlayer) {
+                    const result = minimax(newBoard, humanPlayer);
+                    move.score = result.score;
+                } else {
+                    const result = minimax(newBoard, aiPlayer);
+                    move.score = result.score;
+                }
+
+                newBoard[availSpots[i]] = '';
+                moves.push(move);
+            }
+
+            let bestMove;
+            if (player === aiPlayer) {
+                let bestScore = -10000;
+                for (let i = 0; i < moves.length; i++) {
+                    if (moves[i].score > bestScore) {
+                        bestScore = moves[i].score;
+                        bestMove = i;
+                    }
+                }
+            } else {
+                let bestScore = 10000;
+                for (let i = 0; i < moves.length; i++) {
+                    if (moves[i].score < bestScore) {
+                        bestScore = moves[i].score;
+                        bestMove = i;
+                    }
+                }
+            }
+            return moves[bestMove];
+        }
+
+        function handleCellClick(e) {
+            const index = e.target.getAttribute('data-index');
+            if (boardState[index] !== '' || !gameActive) {
+                return;
+            }
+            
+            makeMove(index, humanPlayer);
+
+            if (gameActive) {
+                // AI's turn
+                statusDisplay.innerText = "Bot is thinking...";
+                // Add a small delay for dramatic effect
+                setTimeout(() => {
+                    const bestMove = minimax(boardState, aiPlayer);
+                    makeMove(bestMove.index, aiPlayer);
+                }, 500);
+            }
+        }
+
+        function makeMove(index, player) {
+            if (!gameActive || boardState[index] !== '') return;
+            
+            boardState[index] = player;
+            cells[index].innerText = player;
+            cells[index].classList.add(player.toLowerCase());
+            cells[index].style.cursor = 'not-allowed';
+
+            if (checkWinner(boardState, player)) {
+                endGame(false, player);
+            } else if (getAvailableMoves(boardState).length === 0) {
+                endGame(true);
+            } else {
+                gameActive = true;
+                statusDisplay.innerText = (player === aiPlayer) ? "Your Turn (O)" : "Bot's Turn (X)";
+            }
+        }
+
+        function endGame(draw, winner = null) {
+            gameActive = false;
+            if (draw) {
+                statusDisplay.innerText = "It's a Draw!";
+            } else {
+                statusDisplay.innerText = `${winner} Wins!`;
+            }
+            cells.forEach(cell => cell.style.cursor = 'not-allowed');
+        }
+
+        function startGame() {
+            gameActive = true;
+            boardState = Array(9).fill('');
+            boardElement.innerHTML = '';
+            statusDisplay.innerText = "Your Turn (O)";
+            
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.setAttribute('data-index', i);
+                cell.addEventListener('click', handleCellClick);
+                boardElement.appendChild(cell);
+                cells[i] = cell;
+            }
+        }
+
+        restartBtn.addEventListener('click', startGame);
+        startGame();
+    </script>
+</body>
+</html>
